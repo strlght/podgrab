@@ -44,4 +44,3 @@ jobs:
           cache-to: type=local,dest=/tmp/.buildx-cache
           tags: |
             ghcr.io/strlght/podgrab:latest
-            ghcr.io/strlght/podgrab:1.0.0
