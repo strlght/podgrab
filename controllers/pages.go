@@ -31,6 +31,7 @@ type SettingModel struct {
 	GenerateNFOFile               bool   `form:"generateNFOFile" json:"generateNFOFile" query:"generateNFOFile"`
 	DontDownloadDeletedFromDisk   bool   `form:"dontDownloadDeletedFromDisk" json:"dontDownloadDeletedFromDisk" query:"dontDownloadDeletedFromDisk"`
 	BaseUrl                       string `form:"baseUrl" json:"baseUrl" query:"baseUrl"`
+	NotificationUrl               string `form:"notificationUrl" json:"notificationUrl" query:"notificationUrl"`
 }
 
 var searchOptions = map[string]string{
