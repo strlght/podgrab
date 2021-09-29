@@ -16,6 +16,7 @@ import (
 	"github.com/akhilrex/podgrab/db"
 	"github.com/akhilrex/podgrab/model"
 	"github.com/antchfx/xmlquery"
+	"github.com/containrrr/shoutrrr"
 	strip "github.com/grokify/html-strip-tags-go"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -234,12 +235,12 @@ func AddPodcast(url string) (db.Podcast, error) {
 
 }
 
-func AddPodcastItems(podcast *db.Podcast, newPodcast bool) error {
+func AddPodcastItems(podcast *db.Podcast, newPodcast bool) (bool, error) {
 	//fmt.Println("Creating: " + podcast.ID)
 	data, _, err := FetchURL(podcast.URL)
 	if err != nil {
 		//log.Fatal(err)
-		return err
+		return false, err
 	}
 	setting := db.GetOrCreateSetting()
 	limit := setting.InitialDownloadCount
@@ -258,6 +259,7 @@ func AddPodcastItems(podcast *db.Podcast, newPodcast bool) error {
 	for _, item := range *existingItems {
 		keyMap[item.GUID] = 1
 	}
+	var hasNewEpisodes = false
 	var latestDate = time.Time{}
 	var itemsAdded = make(map[string]string)
 	for i := 0; i < len(data.Channel.Item); i++ {
@@ -338,13 +340,14 @@ func AddPodcastItems(podcast *db.Podcast, newPodcast bool) error {
 			}
 			db.CreatePodcastItem(&podcastItem)
 			itemsAdded[podcastItem.ID] = podcastItem.FileURL
+			hasNewEpisodes = true
 		}
 	}
 	if (latestDate != time.Time{}) {
 		db.UpdateLastEpisodeDateForPodcast(podcast.ID, latestDate)
 	}
 	//go updateSizeFromUrl(itemsAdded)
-	return err
+	return hasNewEpisodes, err
 }
 
 func updateSizeFromUrl(itemUrlMap map[string]string) {
@@ -613,15 +616,24 @@ func RefreshEpisodes() error {
 	if err != nil {
 		return err
 	}
+	var podcastsWithNewEpisodes []string
 	for _, item := range data {
 		isNewPodcast := item.LastEpisode == nil
 		if isNewPodcast {
 			fmt.Println(item.Title)
 			db.ForceSetLastEpisodeDate(item.ID)
 		}
-		AddPodcastItems(&item, isNewPodcast)
+		hasNewEpisodes, _ := AddPodcastItems(&item, isNewPodcast)
+		if (!isNewPodcast && hasNewEpisodes) {
+			podcastsWithNewEpisodes = append(podcastsWithNewEpisodes, item.Title)
+		}
 	}
-	//	setting := db.GetOrCreateSetting()
+
+	setting := db.GetOrCreateSetting()
+	if setting.NotificationUrl != "" {
+		podcastNames := strings.Join(podcastsWithNewEpisodes[:], ", ")
+		shoutrrr.Send(setting.NotificationUrl, "New episode available: " + podcastNames)
+	}
 
 	go DownloadMissingEpisodes()
 
@@ -756,7 +768,7 @@ func GetSearchFromPodcastIndex(pod *podcastindex.Podcast) *model.CommonSearchRes
 
 func UpdateSettings(downloadOnAdd bool, initialDownloadCount int, autoDownload bool,
 	appendDateToFileName bool, appendEpisodeNumberToFileName bool, darkMode bool, downloadEpisodeImages bool,
-	generateNFOFile bool, dontDownloadDeletedFromDisk bool, baseUrl string) error {
+	generateNFOFile bool, dontDownloadDeletedFromDisk bool, baseUrl string, notificationUrl string) error {
 	setting := db.GetOrCreateSetting()
 
 	setting.AutoDownload = autoDownload
@@ -769,6 +781,7 @@ func UpdateSettings(downloadOnAdd bool, initialDownloadCount int, autoDownload b
 	setting.GenerateNFOFile = generateNFOFile
 	setting.DontDownloadDeletedFromDisk = dontDownloadDeletedFromDisk
 	setting.BaseUrl = baseUrl
+	setting.NotificationUrl = notificationUrl
 
 	return db.UpdateSettings(setting)
 }
