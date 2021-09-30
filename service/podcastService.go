@@ -630,7 +630,7 @@ func RefreshEpisodes() error {
 	}
 
 	setting := db.GetOrCreateSetting()
-	if setting.NotificationUrl != "" {
+	if (setting.NotificationUrl != "" && len(podcastsWithNewEpisodes) > 0) {
 		podcastNames := strings.Join(podcastsWithNewEpisodes[:], ", ")
 		shoutrrr.Send(setting.NotificationUrl, "New episode available: " + podcastNames)
 	}
